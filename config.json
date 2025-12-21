@@ -1,0 +1,41 @@
+{
+  "project": {
+    "name": "Document Classification System",
+    "version": "1.0.0",
+    "mode": "offline"
+  },
+  "models": {
+    "cv": {
+      "backbone": "resnet50",
+      "input_size": [
+        224,
+        224
+      ],
+      "pretrained": true
+    },
+    "nlp": {
+      "model_name": "distiluse-base-multilingual-cased-v2",
+      "max_length": 512
+    },
+    "gabarits": {
+      "enabled": true,
+      "confidence_threshold": 0.7
+    }
+  },
+  "data": {
+    "raw_dir": "data/raw",
+    "processed_dir": "data/processed",
+    "annotations_dir": "data/annotations"
+  },
+  "output": {
+    "output_dir": "output",
+    "log_dir": "logs"
+  },
+  "classes": [
+    "piece_identite",
+    "releve_bancaire",
+    "facture_electricite",
+    "facture_eau",
+    "document_employeur"
+  ]
+}
