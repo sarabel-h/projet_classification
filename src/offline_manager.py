@@ -1,130 +1,161 @@
-"""
-Gestionnaire de modèles offline pour l'initialisation complète sans internet
-"""
-
-import os
+# src/offline_manager.py
+import torch
 import json
-import hashlib
 from pathlib import Path
-from typing import Dict, Optional
-import logging
 
-logger = logging.getLogger(__name__)
-
-
-class OfflineModelManager:
-    """Gère le chargement et la cache des modèles localement"""
-    
-    def __init__(self, models_dir: str = "models"):
-        """
-        Initialise le gestionnaire de modèles offline
-        
-        Args:
-            models_dir: Chemin vers le répertoire contenant les modèles
-        """
-        self.models_dir = Path(models_dir)
-        self.models_dir.mkdir(parents=True, exist_ok=True)
+class GestionnaireOffline:
+    def __init__(self):
+        self.base_dir = Path(".")
         self.cache = {}
-        self.models_manifest = self.models_dir / "manifest.json"
-        self._load_manifest()
     
-    def _load_manifest(self):
-        """Charge le manifeste des modèles disponibles"""
-        if self.models_manifest.exists():
-            with open(self.models_manifest, 'r') as f:
-                self.manifest = json.load(f)
-        else:
-            self.manifest = {
-                "cv": {},
-                "nlp": {},
-                "gabarits": {}
-            }
-    
-    def _save_manifest(self):
-        """Sauvegarde le manifeste des modèles"""
-        with open(self.models_manifest, 'w') as f:
-            json.dump(self.manifest, f, indent=2)
-    
-    def verify_model_integrity(self, model_path: str, expected_hash: Optional[str] = None) -> bool:
-        """
-        Vérifie l'intégrité d'un modèle sauvegardé
+    def get_cv_model(self, nom="resnet50"):
+        """Charge ResNet50 ou MobileNetV2"""
+        if f"cv_{nom}" in self.cache:
+            print(f"📦 Utilisation cache: {nom}")
+            return self.cache[f"cv_{nom}"]
         
-        Args:
-            model_path: Chemin vers le modèle
-            expected_hash: Hash MD5 attendu (optionnel)
-            
-        Returns:
-            True si le modèle est valide
-        """
-        model_file = self.models_dir / model_path
-        if not model_file.exists():
-            logger.warning(f"Modèle non trouvé: {model_path}")
-            return False
+        chemin = self.base_dir / "models" / "cv" / f"{nom}.pth"
         
-        # Calcul du hash
-        hash_md5 = hashlib.md5()
-        with open(model_file, 'rb') as f:
-            for chunk in iter(lambda: f.read(4096), b""):
-                hash_md5.update(chunk)
-        
-        actual_hash = hash_md5.hexdigest()
-        
-        if expected_hash and actual_hash != expected_hash:
-            logger.error(f"Hash mismatch pour {model_path}")
-            return False
-        
-        logger.info(f"Modèle vérifié: {model_path} (hash: {actual_hash})")
-        return True
-    
-    def get_model(self, model_type: str, model_name: str):
-        """
-        Charge un modèle depuis le cache ou le disque
-        
-        Args:
-            model_type: Type de modèle ('cv', 'nlp', 'gabarits')
-            model_name: Nom du modèle
-            
-        Returns:
-            Le modèle chargé
-        """
-        cache_key = f"{model_type}_{model_name}"
-        
-        # Vérifier le cache en mémoire
-        if cache_key in self.cache:
-            logger.info(f"Modèle chargé depuis le cache: {cache_key}")
-            return self.cache[cache_key]
-        
-        # Charger depuis le disque
-        model_path = self.models_dir / model_type / f"{model_name}.pth"
-        if not model_path.exists():
-            logger.error(f"Modèle non trouvé: {model_path}")
+        if not chemin.exists():
+            print(f"❌ Modèle {nom} non trouvé")
+            print("   Exécutez: python setup_offline.py")
             return None
         
-        logger.info(f"Chargement du modèle: {model_path}")
-        # Implémentation réelle dépendra du framework utilisé
-        # Pour l'instant, c'est un placeholder
+        print(f"🔄 Chargement {nom}...")
         
-        self.cache[cache_key] = model_path
-        return model_path
+        if nom == "resnet50":
+            from torchvision import models
+            model = models.resnet50(pretrained=False)
+        elif nom == "mobilenet_v2":
+            from torchvision import models
+            model = models.mobilenet_v2(pretrained=False)
+        else:
+            print(f"❌ Modèle inconnu: {nom}")
+            return None
+        
+        model.load_state_dict(torch.load(chemin, map_location="cpu"))
+        model.eval()
+        
+        self.cache[f"cv_{nom}"] = model
+        print(f"✅ {nom} chargé")
+        return model
     
-    def list_available_models(self) -> Dict:
-        """Liste tous les modèles disponibles"""
-        models = {
-            "cv": list((self.models_dir / "cv").glob("*.pth")) if (self.models_dir / "cv").exists() else [],
-            "nlp": list((self.models_dir / "nlp").glob("*.pth")) if (self.models_dir / "nlp").exists() else [],
-            "gabarits": list((self.models_dir / "gabarits").glob("*.json")) if (self.models_dir / "gabarits").exists() else []
+    def get_nlp_model(self):
+        """Charge CamemBERT"""
+        if "nlp_camembert" in self.cache:
+            print("📦 Utilisation cache: CamemBERT")
+            return self.cache["nlp_camembert"]
+        
+        chemin = self.base_dir / "models" / "nlp" / "camembert"
+        
+        if not chemin.exists():
+            print("❌ CamemBERT non trouvé")
+            print("   Exécutez: python setup_offline.py")
+            return None, None
+        
+        print("🔄 Chargement CamemBERT...")
+        
+        try:
+            from transformers import CamembertModel, CamembertTokenizer
+            tokenizer = CamembertTokenizer.from_pretrained(str(chemin))
+            model = CamembertModel.from_pretrained(str(chemin))
+        except ImportError:
+            print("❌ Transformers non installé")
+            print("   pip install transformers")
+            return None, None
+        
+        result = (model, tokenizer)
+        self.cache["nlp_camembert"] = result
+        print("✅ CamemBERT chargé")
+        return result
+    
+    def get_gabarits(self):
+        """Charge la config des gabarits marocains"""
+        chemin = self.base_dir / "models" / "gabarits" / "gabarits_maroc.json"
+        
+        if not chemin.exists():
+            print("❌ Gabarits non trouvés")
+            return {}
+        
+        with open(chemin, "r", encoding="utf-8") as f:
+            gabarits = json.load(f)
+        
+        print(f"✅ Gabarits chargés ({len(gabarits)} classes)")
+        return gabarits
+    
+    def get_info(self):
+        """Affiche les infos du système"""
+        info = {
+            "modeles_cv": [],
+            "modeles_nlp": [],
+            "gabarits": False,
+            "ocr": False
         }
-        return {k: [str(p.stem) for p in v] for k, v in models.items()}
-    
-    def get_model_info(self, model_type: str, model_name: str) -> Optional[Dict]:
-        """Récupère les informations d'un modèle"""
-        if model_type in self.manifest and model_name in self.manifest[model_type]:
-            return self.manifest[model_type][model_name]
-        return None
+        
+        # Vérifier CV
+        cv_dir = self.base_dir / "models" / "cv"
+        if cv_dir.exists():
+            for f in cv_dir.glob("*.pth"):
+                info["modeles_cv"].append(f.stem)
+        
+        # Vérifier NLP
+        nlp_dir = self.base_dir / "models" / "nlp"
+        if nlp_dir.exists():
+            for d in nlp_dir.iterdir():
+                if d.is_dir():
+                    info["modeles_nlp"].append(d.name)
+        
+        # Vérifier gabarits
+        gabarits_file = self.base_dir / "models" / "gabarits" / "gabarits_maroc.json"
+        info["gabarits"] = gabarits_file.exists()
+        
+        # Vérifier OCR
+        try:
+            import pytesseract
+            pytesseract.get_tesseract_version()
+            info["ocr"] = True
+        except:
+            info["ocr"] = False
+        
+        return info
 
+def tester():
+    """Teste le gestionnaire"""
+    print("🧪 TEST OFFLINE MANAGER")
+    print("=" * 40)
+    
+    manager = GestionnaireOffline()
+    
+    # Test CV
+    print("\n1. Test modèles CV:")
+    model_cv = manager.get_cv_model("resnet50")
+    if model_cv:
+        print("   ✅ ResNet50 OK")
+    
+    # Test NLP
+    print("\n2. Test modèle NLP:")
+    model_nlp, tokenizer = manager.get_nlp_model()
+    if model_nlp:
+        print("   ✅ CamemBERT OK")
+    
+    # Test gabarits
+    print("\n3. Test gabarits:")
+    gabarits = manager.get_gabarits()
+    if gabarits:
+        print(f"   ✅ {len(gabarits)} classes de documents")
+        for classe in gabarits:
+            print(f"      - {classe}")
+    
+    # Infos système
+    print("\n4. Infos système:")
+    info = manager.get_info()
+    print(f"   Modèles CV: {info['modeles_cv']}")
+    print(f"   Modèles NLP: {info['modeles_nlp']}")
+    print(f"   Gabarits: {'✅' if info['gabarits'] else '❌'}")
+    print(f"   OCR: {'✅' if info['ocr'] else '❌'}")
+    
+    print("\n" + "=" * 40)
+    print("✅ Test terminé!")
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    manager = OfflineModelManager("models")
-    print("Modèles disponibles:")
-    print(manager.list_available_models())
+    tester()

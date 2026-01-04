@@ -1,247 +1,745 @@
-"""
-Script d'initialisation offline
-Télécharge et configure tous les modèles nécessaires pour fonctionner sans internet
-"""
-
 import os
-import sys
-import logging
+import torch
+import json
 from pathlib import Path
-from typing import List, Dict
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+print("=" * 60)
+print("🚀 SETUP OFFLINE - DOCUMENTS MAROCAINS")
+print("=" * 60)
+import os
+import torch
+import json
+from pathlib import Path
 
+print("=" * 60)
+print("🚀 SETUP OFFLINE - DOCUMENTS MAROCAINS")
+print("=" * 60)
 
-class OfflineSetup:
-    """Gère l'initialisation complète de l'environnement offline"""
+# 1. Créer la structure des dossiers
+print("\n📁 Création de la structure...")
+
+dossiers = [
+    "models/cv",
+    "models/nlp",
+    "models/gabarits",
+    "models/ocr",
+    "data/raw/carte_identite",
+    "data/raw/releve_bancaire",
+    "data/raw/facture_electricite",
+    "data/raw/facture_eau",
+    "data/raw/document_employeur",
+    "data/processed",
+    "data/annotations",
+    "src/preprocessing",
+    "src/computer_vision",
+    "src/nlp",
+    "src/fusion",
+    "src/gabarits",
+    "src/utils",
+    "tests"
+]
+
+for dossier in dossiers:
+    Path(dossier).mkdir(parents=True, exist_ok=True)
+    print(f"  ✓ {dossier}")
+
+# Créer __init__.py dans src
+for sous_dossier in ["preprocessing", "computer_vision", "nlp", "fusion", "gabarits", "utils"]:
+    (Path("src") / sous_dossier / "__init__.py").touch(exist_ok=True)
+
+# 2. Télécharger ResNet50
+print("\n🖼️  Téléchargement ResNet50...")
+try:
+    model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet50', pretrained=True)
+    torch.save(model.state_dict(), "models/cv/resnet50.pth")
+    print("  ✓ ResNet50 sauvegardé")
+except Exception as e:
+    print(f"  ✗ Erreur ResNet50: {e}")
+
+# 3. Télécharger MobileNetV2 (modèle léger)
+print("\n📱 Téléchargement MobileNetV2...")
+try:
+    model = torch.hub.load('pytorch/vision:v0.10.0', 'mobilenet_v2', pretrained=True)
+    torch.save(model.state_dict(), "models/cv/mobilenet_v2.pth")
+    print("  ✓ MobileNetV2 sauvegardé")
+except Exception as e:
+    print(f"  ✗ Erreur MobileNetV2: {e}")
+
+# 4. Télécharger CamemBERT
+print("\n🇫🇷 Téléchargement CamemBERT...")
+try:
+    from transformers import CamembertModel, CamembertTokenizer
     
-    def __init__(self, project_root: str = "."):
-        self.project_root = Path(project_root)
-        self.models_dir = self.project_root / "models"
-        self.data_dir = self.project_root / "data"
+    tokenizer = CamembertTokenizer.from_pretrained("camembert-base")
+    model = CamembertModel.from_pretrained("camembert-base")
     
-    def verify_dependencies(self) -> bool:
-        """Vérifie que toutes les dépendances requises sont installées"""
-        required_packages = {
-            'cv2': 'opencv-python',
-            'torch': 'torch',
-            'transformers': 'transformers',
-            'pytesseract': 'pytesseract',
-            'numpy': 'numpy',
-            'pandas': 'pandas',
-            'PIL': 'pillow',
-            'pdf2image': 'pdf2image',
-        }
-        
-        missing_packages = []
-        
-        for import_name, package_name in required_packages.items():
-            try:
-                __import__(import_name)
-                logger.info(f"✓ {package_name} est installé")
-            except ImportError:
-                logger.warning(f"✗ {package_name} n'est pas installé")
-                missing_packages.append(package_name)
-        
-        if missing_packages:
-            logger.error("Packages manquants:")
-            for pkg in missing_packages:
-                logger.error(f"  - Installez: pip install {pkg}")
-            return False
-        
-        return True
+    # Sauvegarder
+    model_dir = "models/nlp/camembert"
+    Path(model_dir).mkdir(parents=True, exist_ok=True)
     
-    def create_directory_structure(self):
-        """Crée la structure de répertoires"""
-        directories = [
-            self.models_dir / "cv",
-            self.models_dir / "nlp",
-            self.models_dir / "gabarits",
-            self.data_dir / "raw",
-            self.data_dir / "processed",
-            self.data_dir / "annotations",
-            self.project_root / "src" / "preprocessing",
-            self.project_root / "src" / "computer_vision",
-            self.project_root / "src" / "nlp",
-            self.project_root / "src" / "fusion",
-            self.project_root / "src" / "gabarits",
-            self.project_root / "src" / "utils",
-            self.project_root / "tests",
-            self.project_root / "output",
-            self.project_root / "logs",
+    model.save_pretrained(model_dir)
+    tokenizer.save_pretrained(model_dir)
+    
+    print("  ✓ CamemBERT sauvegardé")
+except Exception as e:
+    print(f"  ✗ Erreur CamemBERT: {e}")
+    print("  Astuce: pip install transformers")
+
+# 5. Créer les gabarits marocains
+print("\n🎯 Création des gabarits marocains...")
+
+gabarits_maroc = {
+  "carte_identite": {
+    "description": "CNIE biométrique marocaine - Double ligne bilingue",
+    "structure_bande_rouge": {
+      "lignes": 2,
+      "ligne1": {
+        "segments": [
+          {
+            "position": "gauche",
+            "texte": "ROYAUME DU MAROC",
+            "langue": "fr"
+          },
+          {
+            "position": "centre",
+            "type": "motif_ornemental"
+          },
+          {
+            "position": "droite",
+            "texte": "المملكة المغربية",
+            "langue": "ar"
+          }
         ]
-        
-        for directory in directories:
-            directory.mkdir(parents=True, exist_ok=True)
-            logger.info(f"✓ Créé: {directory}")
-    
-    def setup_models_offline(self):
-        """Configure les modèles pour fonctionner offline"""
-        logger.info("Configuration des modèles offline...")
-        
-        # Configuration des modèles CV
-        logger.info("Configuration des modèles CV...")
-        cv_models = {
-            "resnet50": {
-                "description": "ResNet50 pré-entraîné sur ImageNet",
-                "status": "À télécharger manuellement ou utiliser from_pretrained"
-            },
-            "efficientnet": {
-                "description": "EfficientNet pré-entraîné",
-                "status": "À télécharger manuellement ou utiliser from_pretrained"
-            }
+      },
+      "ligne2": {
+        "segments": [
+          {
+            "position": "gauche",
+            "texte": "carte nationale d'identité",
+            "langue": "fr"
+          },
+          {
+            "position": "droite",
+            "texte": "البطاقة الوطنية للتعريف",
+            "langue": "ar"
+          }
+        ]
+      },
+      "couleur_fond": "#CC0000",
+      "couleur_texte": "#000000"
+    },
+    "features": [
+      {
+        "nom": "bande_rouge_haut",
+        "type": "couleur",
+        "zone": [
+          0,
+          0,
+          1,
+          0.15
+        ]
+      },
+      {
+        "nom": "motif_centre",
+        "type": "pattern",
+        "zone": [
+          0.35,
+          0.02,
+          0.65,
+          0.13
+        ]
+      },
+      {
+        "nom": "drapeau_bas",
+        "type": "couleur",
+        "zone": [
+          0.1,
+          0.85,
+          0.25,
+          0.95
+        ]
+      },
+      {
+        "nom": "format_carte",
+        "type": "ratio",
+        "valeur": 1.586
+      }
+    ]
+  },
+  "releve_bancaire_maroc": {
+    "description": "Relevés bancaires multibanques (CIH, Attijariwafa, BP, Barid Bank)",
+    "features": [
+      {
+        "nom": "entete_banque_logo",
+        "type": "region",
+        "description": "Logo de la banque et agence (Haut de page)",
+        "zone": [
+          0.0,
+          0.0,
+          1.0,
+          0.20
+        ]
+      },
+      {
+        "nom": "info_client_rib",
+        "type": "region",
+        "description": "Zone contenant le nom du client, l'adresse et le RIB (souvent un tableau ou ligne)",
+        "zone": [
+          0.0,
+          0.15,
+          1.0,
+          0.38
+        ]
+      },
+      {
+        "nom": "tableau_operations",
+        "type": "region",
+        "description": "Le corps principal contenant la liste des transactions (Date, Valeur, Débit, Crédit)",
+        "zone": [
+          0.02,
+          0.35,
+          0.98,
+          0.85
+        ]
+      },
+      {
+        "nom": "pied_page_soldes",
+        "type": "region",
+        "description": "Bas de page contenant souvent le Nouveau Solde ou les totaux",
+        "zone": [
+          0.0,
+          0.80,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "nom": "detection_rib",
+        "type": "regex",
+        "description": "Détection automatique des 24 chiffres du RIB marocain",
+        "patterns": [
+          "\\d{3}\\s*\\d{3}\\s*\\d{12,16}\\s*\\d{2}",
+          "RIB\\s*[:.]?\\s*\\d+"
+        ]
+      },
+      {
+        "nom": "detection_dates",
+        "type": "regex",
+        "description": "Détection des formats de date (JJ/MM/AAAA ou JJ/MM/AA)",
+        "patterns": [
+          "\\d{2}/\\d{2}/\\d{4}",
+          "\\d{2}/\\d{2}/\\d{2}"
+        ]
+      },
+      {
+        "nom": "mots_cles_solde",
+        "type": "regex",
+        "description": "Repère les lignes de solde (début ou fin)",
+        "patterns": [
+          "SOLDE",
+          "NOUVEAU SOLDE",
+          "ANCIEN SOLDE",
+          "TOTAL"
+        ]
+      }
+    ]
+  },
+  "facture_eau_electricite": {
+    "description": "Factures Eau & Electricité (Logique Robuste V4)",
+    "categories": {
+      "electricite": {
+        "keywords": [
+          "electricite", "electrique", "eiectricite", "flectricite", 
+          "energie active", "energie reactive",
+          "moyenne tension", "basse tension", "mt/bt",
+          "eclairage", "puissance", 
+          "audiovisuel", "csave", "bav", "prom. paysage",
+          "redevance fixe", "prime fixe", "entretien compteur",
+          "كهرباء", "kahraba"
+        ],
+        "units_regex": [
+          "k\\s*[w|v]\\s*h", 
+          "kilowatt",
+          "kwh"
+        ]
+      },
+      "eau": {
+        "keywords": [
+          "eau", "assainissement", "tranche eau", "potable",
+          "debit", "consommation eau", "pollution",
+          "redevance fixe assainissement", "redevance fixe eau",
+          "entretien compteur eau",
+          "ماء", "تطهير", "shourb"
+        ],
+        "units_regex": [
+          "\\d+\\s*m3", 
+          "metre cube", 
+          "metres cubes"
+        ]
+      }
+    },
+    "providers": {
+      "REDAL": ["redal", "ريضال", "rabat", "sale", "skhirat", "temara"],
+      "LYDEC": ["lydec", "lyonnaise", "ليدك", "casablanca", "mohammedia"],
+      "AMENDIS": ["amendis", "amanidis", "أمانديس", "tanger", "tetouan"],
+      "RADEEMA": ["radeema", "radeem", "راديما", "marrakech"],
+      "ONE": ["office national", "onee", "onel"]
+    },
+    "general_keywords": [
+      "facture", "montant", "total", "consommation", "dh", "dhs", 
+      "فاتورة", "مبلغ", "واجب", "payer", "net a payer"
+    ]
+  },
+  "attestation_employeur": {
+    "description": "Attestations Travail & Salaire (Secteur Privé & Public)",
+    "features": [
+      {
+        "nom": "zone_titre",
+        "type": "region",
+        "description": "Haut de page pour identifier le type de document",
+        "zone": [0.0, 0.0, 1.0, 0.30]
+      },
+      {
+        "nom": "corps_texte",
+        "type": "region",
+        "description": "Le texte principal qui contient le nom et la fonction",
+        "zone": [0.0, 0.20, 1.0, 0.70]
+      },
+      {
+        "nom": "bas_page_signature",
+        "type": "region",
+        "description": "Zone de cachet et signature",
+        "zone": [0.0, 0.60, 1.0, 1.0]
+      },
+      {
+        "nom": "mots_cles_type",
+        "type": "keywords",
+        "patterns": {
+          "salaire": ["attestation de salaire", "etat de salaire", "émoluments", "salary"],
+          "travail": ["attestation de travail", "certificat de travail", "travaille en qualité", "est employé"]
         }
-        
-        # Configuration des modèles NLP
-        logger.info("Configuration des modèles NLP...")
-        nlp_models = {
-            "camembert": {
-                "description": "CamemBERT pré-entraîné pour le français",
-                "status": "À télécharger manuellement ou utiliser from_pretrained"
-            }
-        }
-        
-        # Configuration des gabarits
-        logger.info("Configuration des gabarits...")
-        gabarits_config = {
-            "identity": {
-                "zones_obligatoires": ["photo", "texte_identité", "numéro", "dates"],
-                "caracteristiques": ["ratio_carte", "presence_photo", "elements_securite"]
-            },
-            "financial": {
-                "structure": "tabulaire",
-                "caracteristiques": ["alignement_vertical", "separateurs_visibles"]
-            },
-            "electricity": {
-                "caracteristiques": ["tableau_consommation", "unites_kwh", "periodes_facturation"]
-            },
-            "water": {
-                "caracteristiques": ["tableau_consommation", "unites_m3", "structure_facture"]
-            },
-            "employer": {
-                "caracteristiques": ["en_tetes_entreprise", "zones_signature", "structure_contrat"]
-            }
-        }
-        
-        return cv_models, nlp_models, gabarits_config
-    
-    def setup_tesseract(self):
-        """Configure Tesseract OCR pour le français"""
-        logger.info("Configuration de Tesseract OCR...")
-        
-        try:
-            import pytesseract
-            logger.info("✓ pytesseract est installé")
-            
-            # Vérifier si Tesseract est disponible
-            try:
-                pytesseract.get_tesseract_version()
-                logger.info("✓ Tesseract est disponible sur le système")
-            except Exception as e:
-                logger.warning(f"⚠ Tesseract système non trouvé: {e}")
-                logger.info("Installation recommandée:")
-                logger.info("  - Linux: sudo apt-get install tesseract-ocr tesseract-ocr-fra")
-                logger.info("  - macOS: brew install tesseract")
-                logger.info("  - Windows: Télécharger depuis https://github.com/UB-Mannheim/tesseract/wiki")
-        
-        except ImportError:
-            logger.error("pytesseract n'est pas installé")
-            logger.error("Installez: pip install pytesseract")
-    
-    def create_config_file(self):
-        """Crée le fichier de configuration principal"""
-        config = {
-            "project": {
-                "name": "Document Classification System",
-                "version": "1.0.0",
-                "mode": "offline"
-            },
-            "models": {
-                "cv": {
-                    "backbone": "resnet50",
-                    "input_size": [224, 224],
-                    "pretrained": True
-                },
-                "nlp": {
-                    "model_name": "distiluse-base-multilingual-cased-v2",
-                    "max_length": 512
-                },
-                "gabarits": {
-                    "enabled": True,
-                    "confidence_threshold": 0.7
-                }
-            },
-            "data": {
-                "raw_dir": "data/raw",
-                "processed_dir": "data/processed",
-                "annotations_dir": "data/annotations"
-            },
-            "output": {
-                "output_dir": "output",
-                "log_dir": "logs"
-            },
-            "classes": [
-                "piece_identite",
-                "releve_bancaire",
-                "facture_electricite",
-                "facture_eau",
-                "document_employeur"
-            ]
-        }
-        
-        import json
-        config_path = self.project_root / "config.json"
-        with open(config_path, 'w') as f:
-            json.dump(config, f, indent=2)
-        
-        logger.info(f"✓ Configuration créée: {config_path}")
-        return config
-    
-    def run_setup(self):
-        """Exécute l'initialisation complète"""
-        logger.info("=" * 60)
-        logger.info("INITIALISATION DU SYSTÈME OFFLINE")
-        logger.info("=" * 60)
-        
-        # Vérifier les dépendances
-        logger.info("\n[1/5] Vérification des dépendances...")
-        if not self.verify_dependencies():
-            logger.error("Certaines dépendances manquent. Installez-les d'abord.")
-            return False
-        
-        # Créer la structure
-        logger.info("\n[2/5] Création de la structure de répertoires...")
-        self.create_directory_structure()
-        
-        # Configurer les modèles
-        logger.info("\n[3/5] Configuration des modèles...")
-        cv_models, nlp_models, gabarits_config = self.setup_models_offline()
-        
-        # Configurer Tesseract
-        logger.info("\n[4/5] Configuration de Tesseract OCR...")
-        self.setup_tesseract()
-        
-        # Créer le fichier de configuration
-        logger.info("\n[5/5] Création du fichier de configuration...")
-        self.create_config_file()
-        
-        logger.info("\n" + "=" * 60)
-        logger.info("✓ INITIALISATION COMPLÉTÉE AVEC SUCCÈS")
-        logger.info("=" * 60)
-        logger.info("\nProchaines étapes:")
-        logger.info("1. Téléchargez les modèles pré-entraînés (ResNet50, EfficientNet, CamemBERT)")
-        logger.info("2. Placez-les dans les répertoires models/cv/, models/nlp/")
-        logger.info("3. Ajoutez vos données d'entraînement dans data/raw/")
-        logger.info("4. Exécutez main.py pour démarrer le pipeline")
-        
-        return True
+      },
+      {
+        "nom": "regex_cnss",
+        "type": "regex",
+        "description": "Numéro d'immatriculation CNSS (souvent 9 chiffres)",
+        "patterns": [
+          "CNSS\\s*[:.]?\\s*\\d{9}",
+          "immatriculé.*\\d{9}",
+          "n°\\s*\\d{9}"
+        ]
+      },
+      {
+        "nom": "regex_montants",
+        "type": "regex",
+        "description": "Détection de salaire (ex: 5000 DH)",
+        "patterns": [
+          "\\d+[\\s\\.]?\\d{2,3}[,.]\\d{2}\\s*(DH|MAD|DIRHAMS)",
+          "salaire.*\\d+"
+        ]
+      }
+    ]
+  }
+}
+with open("models/gabarits/gabarits_maroc.json", "w", encoding="utf-8") as f:
+    json.dump(gabarits_maroc, f, indent=2, ensure_ascii=False)
+print("  ✓ Gabarits marocains créés")
 
+# 6. Créer config.json
+print("\n  Création de config.json...")
 
-if __name__ == "__main__":
-    setup = OfflineSetup(project_root=".")
-    success = setup.run_setup()
-    sys.exit(0 if success else 1)
+config = {
+    "projet": "Classification Documents Marocains",
+    "version": "1.0",
+    "classes": ["carte_identite", "releve_bancaire", "facture_electricite", "facture_eau", "document_employeur"],
+    "image_size": 224,
+    "langue_ocr": "fra"
+}
+
+with open("config.json", "w", encoding="utf-8") as f:
+    json.dump(config, f, indent=2, ensure_ascii=False)
+print("  ✓ config.json créé")
+
+# 7. Créer OCR config
+print("\n🔤 Création config OCR...")
+
+ocr_config = {
+    "langue": "fra",
+    "config": "--oem 3 --psm 3",
+    "preprocessing": {"dpi": 300}
+}
+
+with open("models/ocr/config.json", "w", encoding="utf-8") as f:
+    json.dump(ocr_config, f, indent=2, ensure_ascii=False)
+print("  ✓ Config OCR créée")
+
+print("\n" + "=" * 60)
+print("✅ SETUP TERMINÉ AVEC SUCCÈS !")
+print("=" * 60)
+print("\n📦 Modèles dans: models/")
+print("🎯 Gabarits: models/gabarits/gabarits_maroc.json")
+print("\n🔄 Testez avec: python src/offline_manager.py")
+# 1. Créer la structure des dossiers
+print("\n📁 Création de la structure...")
+
+dossiers = [
+    "models/cv",
+    "models/nlp",
+    "models/gabarits",
+    "models/ocr",
+    "data/raw/carte_identite",
+    "data/raw/releve_bancaire",
+    "data/raw/facture_electricite",
+    "data/raw/facture_eau",
+    "data/raw/document_employeur",
+    "data/processed",
+    "data/annotations",
+    "src/preprocessing",
+    "src/computer_vision",
+    "src/nlp",
+    "src/fusion",
+    "src/gabarits",
+    "src/utils",
+    "tests"
+]
+
+for dossier in dossiers:
+    Path(dossier).mkdir(parents=True, exist_ok=True)
+    print(f"  ✓ {dossier}")
+
+# Créer __init__.py dans src
+for sous_dossier in ["preprocessing", "computer_vision", "nlp", "fusion", "gabarits", "utils"]:
+    (Path("src") / sous_dossier / "__init__.py").touch(exist_ok=True)
+
+# 2. Télécharger ResNet50
+print("\n🖼️  Téléchargement ResNet50...")
+try:
+    model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet50', pretrained=True)
+    torch.save(model.state_dict(), "models/cv/resnet50.pth")
+    print("  ✓ ResNet50 sauvegardé")
+except Exception as e:
+    print(f"  ✗ Erreur ResNet50: {e}")
+
+# 3. Télécharger MobileNetV2 (modèle léger)
+print("\n📱 Téléchargement MobileNetV2...")
+try:
+    model = torch.hub.load('pytorch/vision:v0.10.0', 'mobilenet_v2', pretrained=True)
+    torch.save(model.state_dict(), "models/cv/mobilenet_v2.pth")
+    print("  ✓ MobileNetV2 sauvegardé")
+except Exception as e:
+    print(f"  ✗ Erreur MobileNetV2: {e}")
+
+# 4. Télécharger CamemBERT
+print("\n🇫🇷 Téléchargement CamemBERT...")
+try:
+    from transformers import CamembertModel, CamembertTokenizer
+    
+    tokenizer = CamembertTokenizer.from_pretrained("camembert-base")
+    model = CamembertModel.from_pretrained("camembert-base")
+    
+    # Sauvegarder
+    model_dir = "models/nlp/camembert"
+    Path(model_dir).mkdir(parents=True, exist_ok=True)
+    
+    model.save_pretrained(model_dir)
+    tokenizer.save_pretrained(model_dir)
+    
+    print("  ✓ CamemBERT sauvegardé")
+except Exception as e:
+    print(f"  ✗ Erreur CamemBERT: {e}")
+    print("  Astuce: pip install transformers")
+
+# 5. Créer les gabarits marocains
+print("\n🎯 Création des gabarits marocains...")
+
+gabarits_maroc = {
+  "carte_identite": {
+    "description": "CNIE biométrique marocaine - Double ligne bilingue",
+    "structure_bande_rouge": {
+      "lignes": 2,
+      "ligne1": {
+        "segments": [
+          {
+            "position": "gauche",
+            "texte": "ROYAUME DU MAROC",
+            "langue": "fr"
+          },
+          {
+            "position": "centre",
+            "type": "motif_ornemental"
+          },
+          {
+            "position": "droite",
+            "texte": "المملكة المغربية",
+            "langue": "ar"
+          }
+        ]
+      },
+      "ligne2": {
+        "segments": [
+          {
+            "position": "gauche",
+            "texte": "carte nationale d'identité",
+            "langue": "fr"
+          },
+          {
+            "position": "droite",
+            "texte": "البطاقة الوطنية للتعريف",
+            "langue": "ar"
+          }
+        ]
+      },
+      "couleur_fond": "#CC0000",
+      "couleur_texte": "#000000"
+    },
+    "features": [
+      {
+        "nom": "bande_rouge_haut",
+        "type": "couleur",
+        "zone": [
+          0,
+          0,
+          1,
+          0.15
+        ]
+      },
+      {
+        "nom": "motif_centre",
+        "type": "pattern",
+        "zone": [
+          0.35,
+          0.02,
+          0.65,
+          0.13
+        ]
+      },
+      {
+        "nom": "drapeau_bas",
+        "type": "couleur",
+        "zone": [
+          0.1,
+          0.85,
+          0.25,
+          0.95
+        ]
+      },
+      {
+        "nom": "format_carte",
+        "type": "ratio",
+        "valeur": 1.586
+      }
+    ]
+  },
+  "releve_bancaire_maroc": {
+    "description": "Relevés bancaires multibanques (CIH, Attijariwafa, BP, Barid Bank)",
+    "features": [
+      {
+        "nom": "entete_banque_logo",
+        "type": "region",
+        "description": "Logo de la banque et agence (Haut de page)",
+        "zone": [
+          0.0,
+          0.0,
+          1.0,
+          0.20
+        ]
+      },
+      {
+        "nom": "info_client_rib",
+        "type": "region",
+        "description": "Zone contenant le nom du client, l'adresse et le RIB (souvent un tableau ou ligne)",
+        "zone": [
+          0.0,
+          0.15,
+          1.0,
+          0.38
+        ]
+      },
+      {
+        "nom": "tableau_operations",
+        "type": "region",
+        "description": "Le corps principal contenant la liste des transactions (Date, Valeur, Débit, Crédit)",
+        "zone": [
+          0.02,
+          0.35,
+          0.98,
+          0.85
+        ]
+      },
+      {
+        "nom": "pied_page_soldes",
+        "type": "region",
+        "description": "Bas de page contenant souvent le Nouveau Solde ou les totaux",
+        "zone": [
+          0.0,
+          0.80,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "nom": "detection_rib",
+        "type": "regex",
+        "description": "Détection automatique des 24 chiffres du RIB marocain",
+        "patterns": [
+          "\\d{3}\\s*\\d{3}\\s*\\d{12,16}\\s*\\d{2}",
+          "RIB\\s*[:.]?\\s*\\d+"
+        ]
+      },
+      {
+        "nom": "detection_dates",
+        "type": "regex",
+        "description": "Détection des formats de date (JJ/MM/AAAA ou JJ/MM/AA)",
+        "patterns": [
+          "\\d{2}/\\d{2}/\\d{4}",
+          "\\d{2}/\\d{2}/\\d{2}"
+        ]
+      },
+      {
+        "nom": "mots_cles_solde",
+        "type": "regex",
+        "description": "Repère les lignes de solde (début ou fin)",
+        "patterns": [
+          "SOLDE",
+          "NOUVEAU SOLDE",
+          "ANCIEN SOLDE",
+          "TOTAL"
+        ]
+      }
+    ]
+  },
+  "facture_eau_electricite": {
+    "description": "Factures Eau & Electricité (Logique Robuste V4)",
+    "categories": {
+      "electricite": {
+        "keywords": [
+          "electricite", "electrique", "eiectricite", "flectricite", 
+          "energie active", "energie reactive",
+          "moyenne tension", "basse tension", "mt/bt",
+          "eclairage", "puissance", 
+          "audiovisuel", "csave", "bav", "prom. paysage",
+          "redevance fixe", "prime fixe", "entretien compteur",
+          "كهرباء", "kahraba"
+        ],
+        "units_regex": [
+          "k\\s*[w|v]\\s*h", 
+          "kilowatt",
+          "kwh"
+        ]
+      },
+      "eau": {
+        "keywords": [
+          "eau", "assainissement", "tranche eau", "potable",
+          "debit", "consommation eau", "pollution",
+          "redevance fixe assainissement", "redevance fixe eau",
+          "entretien compteur eau",
+          "ماء", "تطهير", "shourb"
+        ],
+        "units_regex": [
+          "\\d+\\s*m3", 
+          "metre cube", 
+          "metres cubes"
+        ]
+      }
+    },
+    "providers": {
+      "REDAL": ["redal", "ريضال", "rabat", "sale", "skhirat", "temara"],
+      "LYDEC": ["lydec", "lyonnaise", "ليدك", "casablanca", "mohammedia"],
+      "AMENDIS": ["amendis", "amanidis", "أمانديس", "tanger", "tetouan"],
+      "RADEEMA": ["radeema", "radeem", "راديما", "marrakech"],
+      "ONE": ["office national", "onee", "onel"]
+    },
+    "general_keywords": [
+      "facture", "montant", "total", "consommation", "dh", "dhs", 
+      "فاتورة", "مبلغ", "واجب", "payer", "net a payer"
+    ]
+  },
+  "attestation_employeur": {
+    "description": "Attestations Travail & Salaire (Secteur Privé & Public)",
+    "features": [
+      {
+        "nom": "zone_titre",
+        "type": "region",
+        "description": "Haut de page pour identifier le type de document",
+        "zone": [0.0, 0.0, 1.0, 0.30]
+      },
+      {
+        "nom": "corps_texte",
+        "type": "region",
+        "description": "Le texte principal qui contient le nom et la fonction",
+        "zone": [0.0, 0.20, 1.0, 0.70]
+      },
+      {
+        "nom": "bas_page_signature",
+        "type": "region",
+        "description": "Zone de cachet et signature",
+        "zone": [0.0, 0.60, 1.0, 1.0]
+      },
+      {
+        "nom": "mots_cles_type",
+        "type": "keywords",
+        "patterns": {
+          "salaire": ["attestation de salaire", "etat de salaire", "émoluments", "salary"],
+          "travail": ["attestation de travail", "certificat de travail", "travaille en qualité", "est employé"]
+        }
+      },
+      {
+        "nom": "regex_cnss",
+        "type": "regex",
+        "description": "Numéro d'immatriculation CNSS (souvent 9 chiffres)",
+        "patterns": [
+          "CNSS\\s*[:.]?\\s*\\d{9}",
+          "immatriculé.*\\d{9}",
+          "n°\\s*\\d{9}"
+        ]
+      },
+      {
+        "nom": "regex_montants",
+        "type": "regex",
+        "description": "Détection de salaire (ex: 5000 DH)",
+        "patterns": [
+          "\\d+[\\s\\.]?\\d{2,3}[,.]\\d{2}\\s*(DH|MAD|DIRHAMS)",
+          "salaire.*\\d+"
+        ]
+      }
+    ]
+  }
+}
+with open("models/gabarits/gabarits_maroc.json", "w", encoding="utf-8") as f:
+    json.dump(gabarits_maroc, f, indent=2, ensure_ascii=False)
+print("  ✓ Gabarits marocains créés")
+
+# 6. Créer config.json
+print("\n  Création de config.json...")
+
+config = {
+    "projet": "Classification Documents Marocains",
+    "version": "1.0",
+    "classes": ["carte_identite", "releve_bancaire", "facture_electricite", "facture_eau", "document_employeur"],
+    "image_size": 224,
+    "langue_ocr": "fra"
+}
+
+with open("config.json", "w", encoding="utf-8") as f:
+    json.dump(config, f, indent=2, ensure_ascii=False)
+print("  ✓ config.json créé")
+
+# 7. Créer OCR config
+print("\n🔤 Création config OCR...")
+
+ocr_config = {
+    "langue": "fra",
+    "config": "--oem 3 --psm 3",
+    "preprocessing": {"dpi": 300}
+}
+
+with open("models/ocr/config.json", "w", encoding="utf-8") as f:
+    json.dump(ocr_config, f, indent=2, ensure_ascii=False)
+print("  ✓ Config OCR créée")
+
+print("\n" + "=" * 60)
+print("✅ SETUP TERMINÉ AVEC SUCCÈS !")
+print("=" * 60)
+print("\n📦 Modèles dans: models/")
+print("🎯 Gabarits: models/gabarits/gabarits_maroc.json")
+print("\n🔄 Testez avec: python src/offline_manager.py")
