@@ -1,0 +1,12 @@
+torch
+torchvision
+transformers
+tqdm
+pytorch-lightning
+scikit-learn
+opencv-python
+pytesseract
+pdf2image
+Pillow
+pandas
+streamlit
