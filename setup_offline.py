@@ -454,81 +454,17 @@ print("\n🎯 Création des gabarits marocains...")
 
 gabarits_maroc = {
   "carte_identite": {
-    "description": "CNIE biométrique marocaine - Double ligne bilingue",
-    "structure_bande_rouge": {
-      "lignes": 2,
-      "ligne1": {
-        "segments": [
-          {
-            "position": "gauche",
-            "texte": "ROYAUME DU MAROC",
-            "langue": "fr"
-          },
-          {
-            "position": "centre",
-            "type": "motif_ornemental"
-          },
-          {
-            "position": "droite",
-            "texte": "المملكة المغربية",
-            "langue": "ar"
-          }
-        ]
+    "description": "CNIE Marocaine (Supporte Ancienne Verte & Nouvelle Biométrique)",
+    "categories": {
+      "cnie_new": {
+        "description": "Nouvelle Carte Biométrique (Bande Rouge)",
+        "keywords": ["royaume", "maroc", "identite", "nationale", "valable"]
       },
-      "ligne2": {
-        "segments": [
-          {
-            "position": "gauche",
-            "texte": "carte nationale d'identité",
-            "langue": "fr"
-          },
-          {
-            "position": "droite",
-            "texte": "البطاقة الوطنية للتعريف",
-            "langue": "ar"
-          }
-        ]
-      },
-      "couleur_fond": "#CC0000",
-      "couleur_texte": "#000000"
-    },
-    "features": [
-      {
-        "nom": "bande_rouge_haut",
-        "type": "couleur",
-        "zone": [
-          0,
-          0,
-          1,
-          0.15
-        ]
-      },
-      {
-        "nom": "motif_centre",
-        "type": "pattern",
-        "zone": [
-          0.35,
-          0.02,
-          0.65,
-          0.13
-        ]
-      },
-      {
-        "nom": "drapeau_bas",
-        "type": "couleur",
-        "zone": [
-          0.1,
-          0.85,
-          0.25,
-          0.95
-        ]
-      },
-      {
-        "nom": "format_carte",
-        "type": "ratio",
-        "valeur": 1.586
+      "cnie_old": {
+        "description": "Ancienne Carte (Fond Vert)",
+        "keywords": ["nom", "prenom", "ne le", "adresse", "pere", "mere"]
       }
-    ]
+    }
   },
   "releve_bancaire_maroc": {
     "description": "Relevés bancaires multibanques (CIH, Attijariwafa, BP, Barid Bank)",

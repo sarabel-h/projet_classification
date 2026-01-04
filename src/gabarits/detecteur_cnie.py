@@ -1,8 +1,3 @@
-"""
-Détecteur CNIE marocaine basé sur gabarits JSON
-Approche : layout + couleur + mots-clés + CIN
-"""
-
 import cv2
 import numpy as np
 import pytesseract
@@ -10,134 +5,154 @@ import json
 import re
 from pathlib import Path
 
-
 class DetecteurCNIE:
     def __init__(self, chemin_gabarits="models/gabarits/gabarits_maroc.json"):
-        self.gabarits = self._charger_gabarits(chemin_gabarits)
-        self.cnie = self.gabarits.get("carte_identite", {})
+        self.config = self._charger_gabarits(chemin_gabarits)
 
-    # -------------------------
-    # Chargement JSON
-    # -------------------------
     def _charger_gabarits(self, chemin):
-        with open(chemin, "r", encoding="utf-8") as f:
-            return json.load(f)
+        try:
+            with open(chemin, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data.get("carte_identite", {})
+        except FileNotFoundError:
+            return {}
 
-    # -------------------------
-    # Utilitaire zone relative → pixels
-    # -------------------------
-    def _extraire_zone(self, image, zone):
-        h, w = image.shape[:2]
-        x1 = int(zone[0] * w)
-        y1 = int(zone[1] * h)
-        x2 = int(zone[2] * w)
-        y2 = int(zone[3] * h)
-        return image[y1:y2, x1:x2]
-
-    # -------------------------
-    # Détection couleur rose/rouge (tolérante)
-    # -------------------------
-    def _zone_rose_ou_rouge(self, image, seuil=0.15):
-        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-        bas = np.array([0, 10, 80])
-        haut = np.array([180, 160, 255])
-        masque = cv2.inRange(hsv, bas, haut)
-        ratio = np.sum(masque > 0) / masque.size
-        return ratio > seuil
-
-    # -------------------------
-    # OCR global (FR + AR)
-    # -------------------------
+    # --- 1. OCR Amélioré (Zoom + Nettoyage) ---
     def _ocr_global(self, image):
-        gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        gris = cv2.resize(gris, None, fx=1.5, fy=1.5)
-        gris = cv2.GaussianBlur(gris, (3, 3), 0)
-        return pytesseract.image_to_string(
-            gris,
-            lang="fra+ara",
-            config="--oem 3 --psm 6"
-        )
-
-    # -------------------------
-    # Mots-clés CNIE depuis JSON
-    # -------------------------
-    def _contient_mots_cnie(self, texte):
-        structure = self.cnie.get("structure_bande_rouge", {})
-        lignes = structure.get("ligne1", {}).get("segments", []) + \
-                 structure.get("ligne2", {}).get("segments", [])
-
-        texte = texte.lower()
-        for seg in lignes:
-            if "texte" in seg:
-                if seg["texte"].lower() in texte:
-                    return True
-        return False
-
-    # -------------------------
-    # CIN (regex fiable)
-    # -------------------------
-    def _detecter_cin(self, texte):
-        return re.search(r"\b[A-Z]{1,2}\d{5,6}\b", texte) is not None
-
-    # -------------------------
-    # Vérification format carte
-    # -------------------------
-    def _format_carte_ok(self, image):
+        # 1. Agrandissement (Crucial pour les cartes d'identité)
         h, w = image.shape[:2]
-        ratio = w / h
-        attendu = self.cnie.get("features", [])[-1].get("valeur", 1.586)
-        return abs(ratio - attendu) < 0.15, ratio
+        factor = 1
+        if w < 1000: # Si l'image est petite, on zoome
+            factor = 2
+            image = cv2.resize(image, None, fx=factor, fy=factor, interpolation=cv2.INTER_CUBIC)
+        
+        # 2. Prétraitement
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        
+        # Filtre anti-bruit léger
+        gray = cv2.fastNlMeansDenoising(gray, None, 10, 7, 21)
+        
+        # Binarisation automatique (Otsu)
+        thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+        
+        # 3. Lecture (PSM 6 = Bloc de texte uniforme, mieux pour les cartes)
+        try:
+            # On essaie fra+ara, sinon juste fra
+            txt = pytesseract.image_to_string(thresh, lang="fra+ara", config="--psm 6")
+        except:
+            txt = pytesseract.image_to_string(thresh, lang="fra", config="--psm 6")
+            
+        return txt.lower()
 
-    # -------------------------
-    # Analyse principale
-    # -------------------------
-    def analyser_image(self, chemin_image):
-        image = cv2.imread(str(chemin_image))
-        if image is None:
-            return {"est_cnie": False, "erreur": "Image non chargée"}
+    # --- 2. Couleurs Normalisées ---
+    def _analyser_couleurs(self, image):
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        h, w = image.shape[:2]
+        
+        # Zone Haut (30%) pour la bande rouge
+        zone_haut = hsv[0:int(h*0.30), 0:w]
+        
+        # Zone Globale pour le vert
+        zone_globale = hsv
 
-        score = 0
+        # Rouge (Début et Fin du spectre HSV)
+        # On divise par 255 pour avoir un vrai pourcentage (0.0 à 1.0)
+        mask_red1 = cv2.inRange(zone_haut, np.array([0, 70, 50]), np.array([10, 255, 255]))
+        mask_red2 = cv2.inRange(zone_haut, np.array([170, 70, 50]), np.array([180, 255, 255]))
+        nb_pixels_rouge = np.sum(mask_red1) + np.sum(mask_red2)
+        # total pixels * 255 (car le masque vaut 255)
+        ratio_red = nb_pixels_rouge / 255 / (zone_haut.size / 3) 
 
-        # 1. Format carte
-        format_ok, ratio = self._format_carte_ok(image)
-        if format_ok:
-            score += 20
-
-        # 2. Bande haute couleur
-        for f in self.cnie.get("features", []):
-            if f["nom"] == "bande_rouge_haut":
-                zone = self._extraire_zone(image, f["zone"])
-                if self._zone_rose_ou_rouge(zone):
-                    score += 20
-
-        # 3. OCR + mots-clés
-        texte = self._ocr_global(image)
-        if self._contient_mots_cnie(texte):
-            score += 30
-
-        # 4. CIN
-        if self._detecter_cin(texte):
-            score += 30
+        # Vert (Teinte 35-85)
+        mask_green = cv2.inRange(zone_globale, np.array([35, 40, 40]), np.array([85, 255, 255]))
+        nb_pixels_vert = np.sum(mask_green)
+        ratio_green = nb_pixels_vert / 255 / (zone_globale.size / 3)
 
         return {
-            "est_cnie": score >= 60,
-            "score": score,
-            "ratio": round(ratio, 3),
-            "message": "CNIE détectée" if score >= 60 else "Pas une CNIE"
+            # Seuils ajustés : 3% de rouge suffit pour une bande fine
+            "rouge_haut": ratio_red > 0.03, 
+            # 10% de vert pour l'ancienne carte
+            "vert_global": ratio_green > 0.10,
+            "valeurs": {"red": round(ratio_red, 3), "green": round(ratio_green, 3)}
         }
 
+    # --- 3. Analyse ---
+    def analyser_image(self, chemin_image):
+        if isinstance(chemin_image, (str, Path)):
+            image = cv2.imread(str(chemin_image))
+        else:
+            image = chemin_image
+            
+        if image is None: return {"est_cnie": False, "erreur": "Image invalide"}
 
-# -------------------------
-# TEST
-# -------------------------
-if __name__ == "__main__":
-    detecteur = DetecteurDocuments(
-        chemin_gabarits="models/gabarits/gabarits_maroc.json"
-    )
+        # OCR
+        texte_brut = self._ocr_global(image)
+        # Couleurs
+        couleurs = self._analyser_couleurs(image)
 
-    image_test = "tests/image_test.jpg"
-    if Path(image_test).exists():
-        resultat = detecteur.analyser_image(image_test)
-        print(resultat)
-    else:
-        print("Image de test introuvable")
+        score_new = 0
+        score_old = 0
+        details = []
+
+        # -- PISTE 1 : Nouvelle CNIE (Bande Rouge) --
+        if couleurs["rouge_haut"]:
+            score_new += 30
+            details.append("Couleur: Bande Rouge")
+        
+        # Mots clés spécifiques
+        kws_new = ["identite", "nationale", "royaume", "maroc", "valable", "date"]
+        matches_new = sum(1 for w in kws_new if w in texte_brut)
+        if matches_new >= 2:
+            score_new += 40
+            details.append(f"Mots-clés ({matches_new})")
+
+        # -- PISTE 2 : Ancienne CNIE (Verte) --
+        if couleurs["vert_global"]:
+            score_old += 30
+            details.append("Couleur: Fond Vert")
+            
+        kws_old = ["nom", "prenom", "ne le", "a", "fils", "fille", "adresse"]
+        matches_old = sum(1 for w in kws_old if w in texte_brut)
+        if matches_old >= 2:
+            score_old += 40
+            details.append(f"Mots-clés ({matches_old})")
+
+        # -- PISTE 3 : CIN (Le Juge de Paix) --
+        # Regex robuste : 1 ou 2 lettres + chiffres
+        # Ex: AB123456 ou BK 12345
+        regex_cin = r"(?<![a-z])[a-z]{1,2}\s?[0-9]{3,6}(?![0-9])"
+        match_cin = re.search(regex_cin, texte_brut)
+        
+        cin_score = 0
+        cin_trouve = None
+        
+        if match_cin:
+            cin_trouve = match_cin.group(0).upper()
+            cin_score = 50 # Bonus énorme si CIN trouvé
+            details.append(f"CIN: {cin_trouve}")
+        elif "carte nationale" in texte_brut or "cin" in texte_brut:
+             cin_score = 20 # Bonus "Titre trouvé"
+
+        # Score Final
+        score_final = max(score_new, score_old) + cin_score
+        
+        # Détermination du type
+        type_doc = "Inconnu"
+        if score_final >= 50:
+            if score_new > score_old:
+                type_doc = "CNIE Biométrique (Nouvelle)"
+            else:
+                type_doc = "CNIE (Ancienne)"
+
+        # On renvoie aussi un bout du texte lu pour le debug
+        snippet = texte_brut[:50].replace('\n', ' ') + "..."
+
+        return {
+            "est_cnie": score_final >= 50,
+            "type": type_doc,
+            "score": min(100, score_final),
+            "cin_detecte": cin_trouve,
+            "details": details,
+            "debug_couleur": couleurs["valeurs"],
+            "debug_texte": snippet
+        }

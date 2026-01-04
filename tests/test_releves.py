@@ -14,7 +14,7 @@ from src.gabarits.detecteur_releves import DetecteurReleveBancaire, pdf_vers_ima
 # On utilise Path pour gérer les chemins proprement (Mac/Windows/Linux)
 BASE_DIR = Path(parent_dir) 
 CHEMIN_JSON = BASE_DIR / "models" / "gabarits" / "gabarits_maroc.json"
-DOSSIER_DATA = BASE_DIR / "data" / "raw" / "releves_bancaires"
+DOSSIER_DATA = BASE_DIR / "data" / "raw" / "releve_bancaire"
 
 def main():
     print("🔍 DÉMARRAGE DU TEST (Portable - Windows/Mac/Linux)")
