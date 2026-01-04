@@ -1,9 +1,9 @@
 import streamlit as st
-from .ocr import extract_text, split_text_lang
-from .rules import classify_text
-from .nlp_predict import predict_text
-from .cnn_predict import predict_image
-from .vision import detect_id_card
+from ocr import extract_text, split_text_lang
+from rules import classify_text
+from nlp_predict import predict_text
+from cnn_predict import predict_image
+from vision import detect_id_card
 
 st.title('Offline Document Classifier (Demo)')
 uploaded = st.file_uploader('Uploader un document', type=['pdf','png','jpg','jpeg'])

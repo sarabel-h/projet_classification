@@ -1,9 +1,9 @@
 import os, json
 from sklearn.metrics import classification_report, confusion_matrix
-from .ocr import extract_text, split_text_lang
-from .rules import classify_text
-from .nlp_predict import predict_text
-from .cnn_predict import predict_image
+from ocr import extract_text, split_text_lang
+from rules import classify_text
+from nlp_predict import predict_text
+from cnn_predict import predict_image
 
 RAW_DIR = 'data/raw'
 RESULTS_DIR = 'results'

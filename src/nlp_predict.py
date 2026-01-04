@@ -1,7 +1,7 @@
 import os
 import torch
 from transformers import CamembertTokenizer
-from .nlp_model import CamembertClassifier, CLASS_NAMES
+from nlp_model import CamembertClassifier, CLASS_NAMES
 
 MODEL_PATH = "models/camembert_classifier.pth"
 

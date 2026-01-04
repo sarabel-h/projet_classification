@@ -9,9 +9,9 @@ from sklearn.model_selection import train_test_split
 
 DATA_DIR = "data/raw"
 MODEL_OUT = "models/camembert_classifier.pth"
-EPOCHS = 4
+EPOCHS = 10
 BATCH_SIZE = 4
-MAX_LEN = 512
+MAX_LEN = 256
 
 tokenizer = CamembertTokenizer.from_pretrained("camembert-base")
 

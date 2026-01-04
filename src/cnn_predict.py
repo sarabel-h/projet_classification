@@ -1,6 +1,6 @@
 import torch
-from .cnn_model import load_cnn_model, CLASS_NAMES
-from .image_utils import load_image
+from cnn_model import load_cnn_model, CLASS_NAMES
+from image_utils import load_image
 import os
 
 MODEL_PATH = 'models/cnn_resnet50.pth'
