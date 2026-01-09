@@ -1,0 +1,11 @@
+torch
+torchvision
+transformers
+scikit-learn
+streamlit
+pytesseract
+pdf2image
+opencv-python-headless
+Pillow
+numpy
+pandas
