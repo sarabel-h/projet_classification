@@ -19,7 +19,7 @@ NLP_MODEL_PATH = os.path.join(MODELS_DIR, "camembert_classifier.pth")
 
 # --- Paramètres ---
 IMG_SIZE = 224
-MAX_LEN_NLP = 512
+MAX_LEN_NLP = 256
 BATCH_SIZE = 8
 EPOCHS = 10
 
